@@ -24,6 +24,11 @@ public class Product {
     //GigDecimal used for better financial calculation
     private BigDecimal price;
 
+    /**
+     * Default constructor for JPA.
+     */
+    public Product() {
+    }
 
     public Product(String name, String description, BigDecimal price)
     {
