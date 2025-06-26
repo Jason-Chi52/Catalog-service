@@ -44,6 +44,8 @@ cd catalog-service-api
 ./gradlew bootRun   # or gradlew.bat bootRun on Windows CMD
 ```
 
+curl http://localhost:8080/products
+
 The API will be available at:
 `http://localhost:8080`
 
