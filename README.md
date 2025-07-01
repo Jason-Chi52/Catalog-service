@@ -42,6 +42,7 @@ catalog-service-api/
 ```bash
 cd catalog-service-api
 ./gradlew bootRun   # or gradlew.bat bootRun on Windows CMD
+npm run dev
 ```
 
 curl http://localhost:8080/products
