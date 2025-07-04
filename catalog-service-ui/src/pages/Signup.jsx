@@ -1,11 +1,13 @@
+// src/pages/Signup.jsx
+
 import React, { useState } from 'react'
 import { Form, Button, Container, Card, Alert } from 'react-bootstrap'
 import { useNavigate } from 'react-router-dom'
 
 /**
- * Login page: calls POST /auth/login and stores JWT.
+ * Signup page: calls POST /auth/signup and stores JWT.
  */
-export default function Login({ onLogin }) {
+export default function Signup({ onSignup }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
@@ -14,16 +16,22 @@ export default function Login({ onLogin }) {
   async function handleSubmit(e) {
     e.preventDefault()
     setError(null)
+
     try {
-      const res = await fetch('http://localhost:8080/auth/login', {
+      const res = await fetch('http://localhost:8080/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       })
-      if (!res.ok) throw new Error('Invalid credentials')
+
+      if (!res.ok) {
+        const msg = await res.text()
+        throw new Error(msg || 'Signup failed')
+      }
+
       const { token } = await res.json()
-      onLogin(token)
-      navigate('/products')
+      onSignup(token)         // lift token up into App.js
+      navigate('/products')   // redirect to protected page
     } catch (err) {
       setError(err.message)
     }
@@ -35,10 +43,10 @@ export default function Login({ onLogin }) {
       style={{ minHeight: '60vh' }}
     >
       <Card className="p-4" style={{ maxWidth: '400px', width: '100%' }}>
-        <h2 className="mb-4 text-center">Login</h2>
+        <h2 className="mb-4 text-center">Sign Up</h2>
         {error && <Alert variant="danger">{error}</Alert>}
         <Form onSubmit={handleSubmit}>
-          <Form.Group controlId="loginUsername" className="mb-3">
+          <Form.Group controlId="signupUsername" className="mb-3">
             <Form.Label>Username</Form.Label>
             <Form.Control
               type="text"
@@ -47,7 +55,7 @@ export default function Login({ onLogin }) {
               required
             />
           </Form.Group>
-          <Form.Group controlId="loginPassword" className="mb-3">
+          <Form.Group controlId="signupPassword" className="mb-3">
             <Form.Label>Password</Form.Label>
             <Form.Control
               type="password"
@@ -57,7 +65,7 @@ export default function Login({ onLogin }) {
             />
           </Form.Group>
           <Button variant="primary" type="submit" className="w-100">
-            Login
+            Sign Up
           </Button>
         </Form>
       </Card>

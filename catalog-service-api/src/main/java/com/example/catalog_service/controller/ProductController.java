@@ -1,19 +1,17 @@
 package com.example.catalog_service.controller;
+
 import com.example.catalog_service.model.Product;
 import com.example.catalog_service.repo.ProductRepository;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
- * REST Controller for managing products in the catalog.
+ * CRUD endpoints for Products.
  */
 @RestController
 @RequestMapping("/products")
-@CrossOrigin(origins = "http://localhost:5173") // React frontend later
 public class ProductController {
 
     private final ProductRepository repo;
@@ -22,37 +20,32 @@ public class ProductController {
         this.repo = repo;
     }
 
-    /**
-     * Get all products.
-     */
+    /** List all products */
     @GetMapping
     public List<Product> getAllProducts() {
         return repo.findAll();
     }
 
-    /**
-     * Get a single product by ID.
-     */
+    /** Get one product */
     @GetMapping("/{id}")
     public ResponseEntity<Product> getProductById(@PathVariable Long id) {
-        Optional<Product> product = repo.findById(id);
-        return product.map(ResponseEntity::ok)
-                      .orElse(ResponseEntity.notFound().build());
+        return repo.findById(id)
+                   .map(ResponseEntity::ok)
+                   .orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * Create a new product.
-     */
+    /** Create new product */
     @PostMapping
     public Product createProduct(@RequestBody Product product) {
         return repo.save(product);
     }
 
-    /**
-     * Update an existing product.
-     */
+    /** Update existing product */
     @PutMapping("/{id}")
-    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody Product updated) {
+    public ResponseEntity<Product> updateProduct(
+            @PathVariable Long id,
+            @RequestBody Product updated
+    ) {
         return repo.findById(id).map(product -> {
             product.setName(updated.getName());
             product.setDescription(updated.getDescription());
@@ -61,9 +54,7 @@ public class ProductController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
-    /**
-     * Delete a product by ID.
-     */
+    /** Delete a product */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
         if (!repo.existsById(id)) {
