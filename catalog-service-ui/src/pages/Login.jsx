@@ -1,33 +1,32 @@
-import React, { useState } from 'react'
-import { Form, Button, Container, Card, Alert } from 'react-bootstrap'
-import { useNavigate } from 'react-router-dom'
+// src/pages/Login.jsx
 
-/**
- * Login page: calls POST /auth/login and stores JWT.
- */
-export default function Login({ onLogin }) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState(null)
-  const navigate = useNavigate()
+import React, { useState, useContext } from 'react';
+import { Form, Button, Container, Card, Alert } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext.jsx';
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError(null)
+export default function Login() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error,    setError]    = useState(null);
+  const navigate = useNavigate();
+
+  // grab login() from context instead of props
+  const { login } = useContext(AuthContext);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+
     try {
-      const res = await fetch('http://localhost:8080/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      })
-      if (!res.ok) throw new Error('Invalid credentials')
-      const { token } = await res.json()
-      onLogin(token)
-      navigate('/products')
+      // call the context login()
+      await login(username, password);
+      // on success, send user to products
+      navigate('/products');
     } catch (err) {
-      setError(err.message)
+      setError(err.message);
     }
-  }
+  };
 
   return (
     <Container
@@ -47,6 +46,7 @@ export default function Login({ onLogin }) {
               required
             />
           </Form.Group>
+
           <Form.Group controlId="loginPassword" className="mb-3">
             <Form.Label>Password</Form.Label>
             <Form.Control
@@ -56,11 +56,12 @@ export default function Login({ onLogin }) {
               required
             />
           </Form.Group>
+
           <Button variant="primary" type="submit" className="w-100">
             Login
           </Button>
         </Form>
       </Card>
     </Container>
-  )
+  );
 }

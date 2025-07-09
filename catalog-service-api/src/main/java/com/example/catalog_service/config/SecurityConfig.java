@@ -3,15 +3,18 @@
 package com.example.catalog_service.config;
 
 import com.example.catalog_service.repo.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
+
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
@@ -21,36 +24,42 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-/**
- * Spring Security configuration: password encoding, user lookup,
- * CORS, CSRF disabling, JWT filter registration, etc.
- */
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Configuration
 public class SecurityConfig {
 
-    /**
-     * Bean that hashes passwords with BCrypt.
-     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     /**
-     * Look up users from the database and adapt them to Spring Security's UserDetails.
+     * Load users from the database and map their roles into GrantedAuthorities.
      */
     @Bean
     public UserDetailsService userDetailsService(UserRepository repo) {
-        return username -> repo.findByUsername(username)
-            .map(u -> User.withUsername(u.getUsername())
-                          .password(u.getPassword())
-                          .authorities("USER")
-                          .build())
-            .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+        return username -> {
+            var userEntity = repo.findByUsername(username)
+                .orElseThrow(() ->
+                    new UsernameNotFoundException("User not found: " + username)
+                );
+
+            List<SimpleGrantedAuthority> authorities = userEntity.getRoles().stream()
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
+
+            return org.springframework.security.core.userdetails.User.builder()
+                .username(userEntity.getUsername())
+                .password(userEntity.getPassword())
+                .authorities(authorities)
+                .build();
+        };
     }
 
     /**
-     * Builds an AuthenticationManager from our UserDetailsService and PasswordEncoder.
+     * Wire in our UserDetailsService + PasswordEncoder.
      */
     @Bean
     public AuthenticationManager authenticationManager(
@@ -60,21 +69,20 @@ public class SecurityConfig {
     ) throws Exception {
         AuthenticationManagerBuilder authBuilder =
             http.getSharedObject(AuthenticationManagerBuilder.class);
-
         authBuilder
             .userDetailsService(userDetailsService)
             .passwordEncoder(passwordEncoder);
-
         return authBuilder.build();
     }
 
     /**
-     * Configure HTTP security:
-     *  - enable CORS (picks up WebConfig)
-     *  - disable CSRF (stateless API)
-     *  - open /auth/** endpoints, secure everything else
-     *  - use stateless session management
-     *  - register our JWT filter before username/password auth
+     * HTTP security rules:
+     *  - /auth/**        open
+     *  - GET /api/products/**  open
+     *  - /api/cart/**    ROLE_USER
+     *  - /api/admin/**   ROLE_ADMIN
+     *  - everything else authenticated
+     *  - stateless (JWT) sessions
      */
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -82,14 +90,23 @@ public class SecurityConfig {
             JwtAuthenticationFilter jwtFilter
     ) throws Exception {
         http
-          .cors(cors -> {})                     // enable CORS from WebConfig
-          .csrf(csrf -> csrf.disable())         // disable CSRF for REST
-          .authorizeHttpRequests(authz -> authz
+          .cors(cors -> {})                           
+          .csrf(csrf -> csrf.disable())               
+          .sessionManagement(sm -> 
+               sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+          )
+          .authorizeHttpRequests(auth -> auth
               .requestMatchers("/auth/**").permitAll()
+              .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
+              .requestMatchers("/api/cart/**").hasAuthority("USER")
+              .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
               .anyRequest().authenticated()
           )
-          .sessionManagement(sess -> sess
-              .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+          .exceptionHandling(e -> 
+              e.authenticationEntryPoint(
+                  (req, res, ex) ->
+                    res.sendError(HttpServletResponse.SC_UNAUTHORIZED, ex.getMessage())
+              )
           )
           .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

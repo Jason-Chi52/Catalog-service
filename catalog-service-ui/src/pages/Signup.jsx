@@ -1,39 +1,28 @@
 // src/pages/Signup.jsx
 
-import React, { useState } from 'react'
-import { Form, Button, Container, Card, Alert } from 'react-bootstrap'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useContext } from 'react';
+import { Form, Button, Container, Card, Alert } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 
-/**
- * Signup page: calls POST /auth/signup and stores JWT.
- */
-export default function Signup({ onSignup }) {
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState(null)
-  const navigate = useNavigate()
+export default function Signup() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error,    setError]    = useState(null);
+  const navigate = useNavigate();
+  const { signup } = useContext(AuthContext);
 
   async function handleSubmit(e) {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault();
+    setError(null);
 
     try {
-      const res = await fetch('http://localhost:8080/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      })
-
-      if (!res.ok) {
-        const msg = await res.text()
-        throw new Error(msg || 'Signup failed')
-      }
-
-      const { token } = await res.json()
-      onSignup(token)         // lift token up into App.js
-      navigate('/products')   // redirect to protected page
+      // call the new signup() from context
+      await signup(username, password);
+      // on success, redirect into your protected area
+      navigate('/products');
     } catch (err) {
-      setError(err.message)
+      setError(err.message);
     }
   }
 
@@ -70,5 +59,5 @@ export default function Signup({ onSignup }) {
         </Form>
       </Card>
     </Container>
-  )
+  );
 }

@@ -1,44 +1,97 @@
-import { createContext, useState } from 'react';
+// src/context/AuthContext.jsx
 
-export const AuthContext = createContext();
+import React, { createContext, useState, useEffect } from 'react'
+
+export const AuthContext = createContext({
+  user: null,
+  login:   async () => {},
+  signup:  async () => {},
+  logout:  () => {}
+})
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const token = localStorage.getItem('token');
-    const roles = JSON.parse(localStorage.getItem('roles') || 'null');
-    const username = localStorage.getItem('username');
-    return token && roles && username
-      ? { username, roles, token }
-      : null;
-  });
+  const [user, setUser] = useState(null)
 
-  const login = async (username, password) => {
-    const response = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || 'Login failed');
+  // On mount, rehydrate from localStorage
+  useEffect(() => {
+    const token    = localStorage.getItem('token')
+    const username = localStorage.getItem('username')
+
+    // Safely parse roles, guarding against the literal string "undefined"
+    let roles = []
+    const stored = localStorage.getItem('roles')
+    if (stored && stored !== 'undefined') {
+      try {
+        roles = JSON.parse(stored)
+      } catch {
+        // ignore parse errors
+        roles = []
+      }
     }
-    const { token, roles } = await response.json();
-    localStorage.setItem('token', token);
-    localStorage.setItem('roles', JSON.stringify(roles));
-    localStorage.setItem('username', username);
-    setUser({ username, roles, token });
-  };
 
+    if (token && username) {
+      setUser({ username, roles, token })
+    }
+  }, [])
+
+  /**
+   * Sign up a new user, store JWT/roles/username, then set context.
+   */
+  const signup = async (username, password) => {
+    const res = await fetch('http://localhost:8080/auth/signup', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username, password })
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || 'Signup failed')
+    }
+    const { token, roles } = await res.json()
+
+    // persist values
+    localStorage.setItem('token', token)
+    localStorage.setItem('username', username)
+    localStorage.setItem('roles', JSON.stringify(roles))
+
+    setUser({ username, roles, token })
+  }
+
+  /**
+   * Log in an existing user.
+   */
+  const login = async (username, password) => {
+    const res = await fetch('http://localhost:8080/auth/login', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ username, password })
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || 'Login failed')
+    }
+    const { token, roles } = await res.json()
+
+    localStorage.setItem('token', token)
+    localStorage.setItem('username', username)
+    localStorage.setItem('roles', JSON.stringify(roles))
+
+    setUser({ username, roles, token })
+  }
+
+  /**
+   * Clear everything on logout.
+   */
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('roles');
-    localStorage.removeItem('username');
-    setUser(null);
-  };
+    localStorage.removeItem('token')
+    localStorage.removeItem('username')
+    localStorage.removeItem('roles')
+    setUser(null)
+  }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, signup, login, logout }}>
       {children}
     </AuthContext.Provider>
-  );
+  )
 }
