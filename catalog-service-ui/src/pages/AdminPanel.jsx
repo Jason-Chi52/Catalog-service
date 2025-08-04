@@ -1,94 +1,123 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Modal, Form, Table } from 'react-bootstrap';
+// src/pages/AdminPanel.jsx
+import React, { useEffect, useState, useContext } from 'react';
+import { Table, Button, Modal, Form, Alert } from 'react-bootstrap';
+import { AuthContext } from '../context/AuthContext.jsx';
 
-export default function AdminPanel({ token }) {
+export default function AdminPanel() {
+  const { user } = useContext(AuthContext);
+  const token = user.token;
+
   const [products, setProducts] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
-  const [formData, setFormData] = useState({ name: '', price: '' });
-
-  const fetchProducts = async () => {
-    const res = await fetch('/api/admin/products', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) setProducts(await res.json());
-  };
+  const [form, setForm] = useState({ name: '', description: '', price: '' });
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (token) fetchProducts();
-  }, [token]);
+    fetchProducts();
+  }, []);
 
-  const handleShowAdd = () => {
-    setEditProduct(null);
-    setFormData({ name: '', price: '' });
-    setShowModal(true);
-  };
-
-  const handleShowEdit = (product) => {
-    setEditProduct(product);
-    setFormData({ name: product.name, price: product.price });
-    setShowModal(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      const res = await fetch(`/api/admin/products/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) fetchProducts();
+  async function fetchProducts() {
+    try {
+      const res = await fetch('http://localhost:8080/api/products');
+      const data = await res.json();
+      setProducts(data);
+    } catch (e) {
+      console.error(e);
     }
-  };
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const url = editProduct
-      ? `/api/admin/products/${editProduct.id}`
-      : '/api/admin/products';
-    const method = editProduct ? 'PUT' : 'POST';
-    const res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        name: formData.name,
-        price: parseFloat(formData.price),
-      }),
+  function openAdd() {
+    setEditProduct(null);
+    setForm({ name: '', description: '', price: '' });
+    setShowModal(true);
+  }
+
+  function openEdit(p) {
+    setEditProduct(p);
+    setForm({
+      name: p.name,
+      description: p.description,
+      price: p.price.toString()
     });
-    if (res.ok) {
+    setShowModal(true);
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this product?')) return;
+    try {
+      const res = await fetch(`http://localhost:8080/api/products/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      fetchProducts();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError(null);
+    const payload = {
+      name: form.name,
+      description: form.description,
+      price: parseFloat(form.price)
+    };
+
+    try {
+      let res;
+      if (editProduct) {
+        res = await fetch(`http://localhost:8080/api/products/${editProduct.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetch('http://localhost:8080/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+      if (!res.ok) throw new Error('Save failed');
       setShowModal(false);
       fetchProducts();
-    } else {
-      alert('Error: ' + await res.text());
+    } catch (e) {
+      setError(e.message);
     }
-  };
+  }
 
   return (
-    <div>
-      <h2>Admin Panel</h2>
-      <Button variant="primary" onClick={handleShowAdd} className="mb-3">
-        Add New Product
-      </Button>
-
+    <>
+      <h2>Admin: Manage Products</h2>
+      {error && <Alert variant="danger">{error}</Alert>}
+      <Button className="mb-3" onClick={openAdd}>+ Add Product</Button>
       <Table striped bordered hover>
         <thead>
-          <tr><th>ID</th><th>Name</th><th>Price</th><th>Actions</th></tr>
+          <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Price</th>
+            <th style={{ width: '150px' }}>Actions</th>
+          </tr>
         </thead>
         <tbody>
           {products.map(p => (
             <tr key={p.id}>
-              <td>{p.id}</td>
               <td>{p.name}</td>
-              <td>${p.price}</td>
+              <td>{p.description}</td>
+              <td>${p.price.toFixed(2)}</td>
               <td>
-                <Button variant="warning" size="sm" onClick={() => handleShowEdit(p)}>
-                  Edit
-                </Button>{' '}
-                <Button variant="danger" size="sm" onClick={() => handleDelete(p.id)}>
-                  Delete
-                </Button>
+                <Button size="sm" onClick={() => openEdit(p)}>Edit</Button>{' '}
+                <Button size="sm" variant="danger" onClick={() => handleDelete(p.id)}>Delete</Button>
               </td>
             </tr>
           ))}
@@ -96,29 +125,34 @@ export default function AdminPanel({ token }) {
       </Table>
 
       <Modal show={showModal} onHide={() => setShowModal(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>{editProduct ? 'Edit Product' : 'Add Product'}</Modal.Title>
+        </Modal.Header>
         <Form onSubmit={handleSubmit}>
-          <Modal.Header closeButton>
-            <Modal.Title>
-              {editProduct ? 'Edit Product' : 'Add Product'}
-            </Modal.Title>
-          </Modal.Header>
           <Modal.Body>
-            <Form.Group controlId="productName">
+            <Form.Group className="mb-2">
               <Form.Label>Name</Form.Label>
               <Form.Control
-                type="text"
-                value={formData.name}
-                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
                 required
               />
             </Form.Group>
-            <Form.Group controlId="productPrice" className="mt-3">
+            <Form.Group className="mb-2">
+              <Form.Label>Description</Form.Label>
+              <Form.Control
+                value={form.description}
+                onChange={e => setForm({ ...form, description: e.target.value })}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
               <Form.Label>Price</Form.Label>
               <Form.Control
                 type="number"
                 step="0.01"
-                value={formData.price}
-                onChange={e => setFormData({ ...formData, price: e.target.value })}
+                value={form.price}
+                onChange={e => setForm({ ...form, price: e.target.value })}
                 required
               />
             </Form.Group>
@@ -127,12 +161,12 @@ export default function AdminPanel({ token }) {
             <Button variant="secondary" onClick={() => setShowModal(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              {editProduct ? 'Save Changes' : 'Add Product'}
+            <Button type="submit" variant="primary">
+              Save
             </Button>
           </Modal.Footer>
         </Form>
       </Modal>
-    </div>
+    </>
   );
 }

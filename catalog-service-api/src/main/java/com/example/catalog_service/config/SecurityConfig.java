@@ -28,21 +28,20 @@ import java.util.stream.Collectors;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // 1) BCrypt password encoder
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // 2) Load users + roles from DB
     @Bean
     public UserDetailsService userDetailsService(UserRepository repo) {
         return username -> repo.findByUsername(username)
             .map(u -> {
                 var auths = u.getRoles().stream()
-                    .map(SimpleGrantedAuthority::new)
-                    .collect(Collectors.toList());
-                return User.withUsername(u.getUsername())
+                             .map(SimpleGrantedAuthority::new)
+                             .collect(Collectors.toList());
+                return User.builder()
+                           .username(u.getUsername())
                            .password(u.getPassword())
                            .authorities(auths)
                            .build();
@@ -50,64 +49,64 @@ public class SecurityConfig {
             .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }
 
-    // 3) Expose AuthenticationManager for AuthController
     @Bean
     public AuthenticationManager authenticationManager(
             HttpSecurity http,
-            PasswordEncoder enc,
+            PasswordEncoder encoder,
             UserDetailsService uds
     ) throws Exception {
         var auth = http.getSharedObject(AuthenticationManagerBuilder.class);
-        auth.userDetailsService(uds).passwordEncoder(enc);
+        auth.userDetailsService(uds).passwordEncoder(encoder);
         return auth.build();
     }
 
-    // 4) CORS config source picked up by http.cors()
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
-        var config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
-        config.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));         // <-- this line lets Authorization through
-        config.setAllowCredentials(true);
-
+        var cfg = new CorsConfiguration();
+        cfg.setAllowedOrigins(List.of("http://localhost:5173"));
+        cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+        cfg.setAllowedHeaders(List.of("*"));
+        cfg.setAllowCredentials(true);
         var src = new UrlBasedCorsConfigurationSource();
-        src.registerCorsConfiguration("/**", config);
+        src.registerCorsConfiguration("/**", cfg);
         return src;
     }
 
-    // 5) Security filter chain with JWT + URL rules
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtFilter
     ) throws Exception {
         http
-          .cors(Customizer.withDefaults())             // picks up corsConfigurationSource()
+          .cors(Customizer.withDefaults())
           .csrf(csrf -> csrf.disable())
           .sessionManagement(sm ->
              sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
           )
           .authorizeHttpRequests(auth -> auth
               .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+              // public reads
+              .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**").permitAll()
               .requestMatchers("/auth/**").permitAll()
-              .requestMatchers(HttpMethod.GET, "/api/products","/api/products/**")
-                .permitAll()
-              .requestMatchers("/api/cart","/api/cart/**")
-                .hasAuthority("USER")
-              .requestMatchers("/api/admin/**").hasAuthority("ADMIN")
+
+              // admin‐only writes on products
+              .requestMatchers(HttpMethod.POST,   "/api/products").hasAuthority("ADMIN")
+              .requestMatchers(HttpMethod.PUT,    "/api/products/**").hasAuthority("ADMIN")
+              .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasAuthority("ADMIN")
+
+              // cart actions require USER
+              .requestMatchers("/api/cart/**").hasAuthority("USER")
+
+              // all else authenticated
               .anyRequest().authenticated()
           )
           .exceptionHandling(ex -> ex
-            .authenticationEntryPoint(
-              (req, res, err) -> res.sendError(
-                HttpServletResponse.SC_UNAUTHORIZED,
-                err.getMessage()
+              .authenticationEntryPoint((req, res, err) ->
+                  res.sendError(HttpServletResponse.SC_UNAUTHORIZED, err.getMessage())
               )
-            )
           )
-          .addFilterBefore(jwtFilter,
-                           UsernamePasswordAuthenticationFilter.class);
+          .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
