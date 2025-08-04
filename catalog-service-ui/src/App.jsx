@@ -1,4 +1,5 @@
 // src/App.jsx
+
 import React, { useContext } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Container } from 'react-bootstrap'
@@ -42,35 +43,30 @@ export default function App() {
             }
           />
 
-          <Route
-            path="/products"
-            element={
-              token
-                ? <Products token={token} />
-                : <Navigate to="/login" replace />
-            }
-          />
+          {/* Public products listing */}
+          <Route path="/products" element={<Products />} />
 
+          {/* Cart page, only for authenticated users */}
           <Route
             path="/cart"
             element={
               token
-                ? <Cart token={token} />
+                ? <Cart />
                 : <Navigate to="/login" replace />
             }
           />
 
+          {/* Admin panel, only for users with ADMIN role */}
           <Route
             path="/admin"
             element={
-              // optional chaining prevents reads on undefined
               user?.roles?.includes('ADMIN')
-                ? <AdminPanel token={token} />
+                ? <AdminPanel />
                 : <Navigate to="/login" replace />
             }
           />
 
-          {/* catch-all */}
+          {/* Catch-all redirects to home */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Container>
