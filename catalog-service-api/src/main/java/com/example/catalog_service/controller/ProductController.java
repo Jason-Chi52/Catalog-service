@@ -1,3 +1,4 @@
+// src/main/java/com/example/catalog_service/controller/ProductController.java
 package com.example.catalog_service.controller;
 
 import com.example.catalog_service.model.Product;
@@ -8,10 +9,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * CRUD endpoints for Products.
+ * CRUD endpoints for Products, now under /api/products
  */
 @RestController
-@RequestMapping("/products")
+@RequestMapping("/api/products")
 public class ProductController {
 
     private final ProductRepository repo;
