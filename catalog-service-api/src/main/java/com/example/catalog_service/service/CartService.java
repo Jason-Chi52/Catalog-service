@@ -1,55 +1,44 @@
-// src/main/java/com/example/catalog_service/service/CartService.java
 package com.example.catalog_service.service;
 
 import com.example.catalog_service.model.CartItem;
-import com.example.catalog_service.model.Product;
 import com.example.catalog_service.repo.CartItemRepository;
-import com.example.catalog_service.repo.ProductRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 @Service
 public class CartService {
-    private final CartItemRepository cartRepo;
-    private final ProductRepository   productRepo;
 
-    public CartService(CartItemRepository cartRepo,
-                       ProductRepository productRepo) {
-        this.cartRepo    = cartRepo;
-        this.productRepo = productRepo;
+  private final CartItemRepository cartItemRepo;
+
+  public CartService(CartItemRepository cartItemRepo) {
+    this.cartItemRepo = cartItemRepo;
+  }
+
+  @Transactional(readOnly = true)
+  public List<CartItem> getCartItems(String username) {
+    return cartItemRepo.findAllByUsername(username);
+  }
+
+  @Transactional
+  public void updateQuantity(String username, Long cartItemId, int quantity) {
+    CartItem ci = cartItemRepo.findByIdAndUsername(cartItemId, username)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart item not found"));
+    if (quantity <= 0) {
+      cartItemRepo.delete(ci);
+    } else {
+      ci.setQuantity(quantity);
+      cartItemRepo.save(ci);
     }
+  }
 
-    /** Add one unit of the given product to the user’s cart. */
-    @Transactional
-    public List<CartItem> addToCart(String username, Long productId) {
-        Product p = productRepo.findById(productId)
-                         .orElseThrow(() -> new IllegalArgumentException("No product " + productId));
-
-        // see if already in cart
-        CartItem existing = cartRepo.findByUsername(username)
-            .stream()
-            .filter(ci -> ci.getProduct().getId().equals(productId))
-            .findFirst()
-            .orElse(null);
-
-        if (existing != null) {
-            existing.setQuantity(existing.getQuantity() + 1);
-            cartRepo.save(existing);
-        } else {
-            CartItem ci = new CartItem();
-            ci.setUsername(username);
-            ci.setProduct(p);
-            ci.setQuantity(1);
-            cartRepo.save(ci);
-        }
-        return cartRepo.findByUsername(username);
-    }
-
-    /** Fetch the full cart for a user. */
-    @Transactional(readOnly = true)
-    public List<CartItem> getCart(String username) {
-        return cartRepo.findByUsername(username);
-    }
+  @Transactional
+  public void removeItem(String username, Long cartItemId) {
+    CartItem ci = cartItemRepo.findByIdAndUsername(cartItemId, username)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Cart item not found"));
+    cartItemRepo.delete(ci);
+  }
 }

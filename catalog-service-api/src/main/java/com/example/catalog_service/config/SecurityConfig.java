@@ -1,7 +1,5 @@
-// src/main/java/com/example/catalog_service/config/SecurityConfig.java
 package com.example.catalog_service.config;
 
-import com.example.catalog_service.config.JwtAuthenticationFilter;
 import com.example.catalog_service.repo.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
@@ -38,13 +36,13 @@ public class SecurityConfig {
         return username -> repo.findByUsername(username)
             .map(u -> {
                 var auths = u.getRoles().stream()
-                             .map(SimpleGrantedAuthority::new)
-                             .collect(Collectors.toList());
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
                 return User.builder()
-                           .username(u.getUsername())
-                           .password(u.getPassword())
-                           .authorities(auths)
-                           .build();
+                        .username(u.getUsername())
+                        .password(u.getPassword())
+                        .authorities(auths)
+                        .build();
             })
             .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
     }
@@ -65,8 +63,11 @@ public class SecurityConfig {
         var cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(List.of("http://localhost:5173"));
         cfg.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
-        cfg.setAllowedHeaders(List.of("*"));
+        // Be explicit so Authorization is accepted cross‑origin
+        cfg.setAllowedHeaders(List.of("Authorization","Content-Type","Accept","Origin"));
+        cfg.setExposedHeaders(List.of("Authorization"));
         cfg.setAllowCredentials(true);
+
         var src = new UrlBasedCorsConfigurationSource();
         src.registerCorsConfiguration("/**", cfg);
         return src;
@@ -80,25 +81,24 @@ public class SecurityConfig {
         http
           .cors(Customizer.withDefaults())
           .csrf(csrf -> csrf.disable())
-          .sessionManagement(sm ->
-             sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-          )
+          .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
           .authorizeHttpRequests(auth -> auth
+              // ✅ Preflight requests must be public
               .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-              // public reads
+              // Public reads
               .requestMatchers(HttpMethod.GET, "/api/products", "/api/products/**").permitAll()
               .requestMatchers("/auth/**").permitAll()
 
-              // admin‐only writes on products
+              // Admin‑only product writes
               .requestMatchers(HttpMethod.POST,   "/api/products").hasAuthority("ADMIN")
               .requestMatchers(HttpMethod.PUT,    "/api/products/**").hasAuthority("ADMIN")
               .requestMatchers(HttpMethod.DELETE, "/api/products/**").hasAuthority("ADMIN")
 
-              // cart actions require USER
+              // Cart actions require USER
               .requestMatchers("/api/cart/**").hasAuthority("USER")
 
-              // all else authenticated
+              // All else authenticated
               .anyRequest().authenticated()
           )
           .exceptionHandling(ex -> ex
@@ -106,6 +106,7 @@ public class SecurityConfig {
                   res.sendError(HttpServletResponse.SC_UNAUTHORIZED, err.getMessage())
               )
           )
+          // Ensure JWT runs before username/password auth
           .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
