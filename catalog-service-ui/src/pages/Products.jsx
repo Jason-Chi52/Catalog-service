@@ -32,29 +32,25 @@ export default function Products() {
     fetchProducts();
   }, [user]);
 
-  const addToCart = async (productId) => {
-    setError(null);
-    try {
-      const res = await fetch(
-        `http://localhost:8080/api/cart?productId=${productId}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${user.token}`
-          }
-        }
-      );
-
-      if (!res.ok) {
-        throw new Error(`Add failed: ${res.status} ${res.statusText}`);
+  const addToCart = async (productId, qty = 1) => {
+    const res = await fetch(
+      `http://localhost:8080/api/cart?productId=${productId}&quantity=${qty}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user.token}`,
+        },
       }
+    );
 
-      alert('✅ Added to cart!');
-    } catch (err) {
-      setError(err.message);
+    if (!res.ok) {
+      throw new Error(`Add failed: ${res.status} ${res.statusText}`);
     }
+    const item = await res.json(); // newly created/merged CartItem
+    return item;
   };
+
 
   return (
     <>
