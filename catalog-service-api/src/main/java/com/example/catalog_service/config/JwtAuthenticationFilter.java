@@ -16,6 +16,10 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.util.AntPathMatcher;
+
+import java.io.IOException;
+import java.util.List;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -24,6 +28,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final AntPathMatcher matcher = new AntPathMatcher();
+
+    // Public routes to skip
+    private final List<String> publicPaths = List.of(
+            "/auth/**",           // signup/login
+            "/api/products/**"    // if you want products open
+    );
 
     public JwtAuthenticationFilter(JwtService jwtService,
                                    UserDetailsService userDetailsService) {
@@ -35,71 +46,59 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             @NonNull HttpServletRequest request,
             @NonNull HttpServletResponse response,
-            @NonNull FilterChain filterChain) throws ServletException, java.io.IOException {
+            @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        // Always let CORS preflight through
+        // 1) Always let CORS preflight through
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        final String path = request.getRequestURI();
-        final String authHeader = request.getHeader("Authorization");
+        // 2) Skip public paths entirely
+        String path = request.getRequestURI();
+        for (String p : publicPaths) {
+            if (matcher.match(p, path)) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
 
+        // 3) Parse Authorization header ONLY if present & Bearer
+        final String authHeader = request.getHeader("Authorization");
         if (authHeader == null) {
-            log.debug("No Authorization header on {}", path);
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Accept case-insensitive "Bearer"
         int sp = authHeader.indexOf(' ');
         if (sp < 0 || !"bearer".equalsIgnoreCase(authHeader.substring(0, sp))) {
-            log.debug("Authorization header not Bearer on {} -> {}", path, authHeader);
             filterChain.doFilter(request, response);
             return;
         }
 
         final String jwt = authHeader.substring(sp + 1).trim();
         if (jwt.isEmpty()) {
-            log.debug("Empty JWT on {}", path);
             filterChain.doFilter(request, response);
             return;
         }
 
-        String username = null;
         try {
-            username = jwtService.extractUsername(jwt);
-        } catch (Exception ex) {
-            log.debug("JWT parse error on {}: {}", path, ex.getMessage());
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
-            return;
-        }
-
-        if (username == null) {
-            log.debug("JWT had no subject on {}", path);
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
-            return;
-        }
-
-        if (SecurityContextHolder.getContext().getAuthentication() == null) {
-            try {
+            String username = jwtService.extractUsername(jwt);
+            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                if (!jwtService.isTokenValid(jwt, userDetails)) {
-                    log.debug("JWT not valid for user {} on {}", username, path);
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid token");
-                    return;
+                if (jwtService.isTokenValid(jwt, userDetails)) {
+                    var authToken = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                    log.debug("Authenticated {} for {}", username, path);
+                } else {
+                    log.debug("JWT not valid for {} on {}", username, path);
                 }
-                var authToken = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
-                log.debug("Authenticated {} for {}", username, path);
-            } catch (Exception e) {
-                log.debug("UserDetailsService failed for {} on {}: {}", username, path, e.getMessage());
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Invalid user");
-                return;
             }
+        } catch (Exception ex) {
+            // IMPORTANT: do NOT send 401 here; just log and continue unauthenticated
+            log.debug("JWT parse/validate error on {}: {}", path, ex.getMessage());
         }
 
         filterChain.doFilter(request, response);
