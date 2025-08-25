@@ -1,4 +1,3 @@
-
 # Catalog Service API
 
 This is a backend REST API built with **Java Spring Boot** to manage a simple product catalog. It supports basic CRUD operations (Create, Read, Update, Delete) on products with fields like name, description, and price.
@@ -113,6 +112,5 @@ The backend accepts requests from your React frontend:
 
 Jason Chi
 Software Engineering Student
-
 
 ---

@@ -1,13 +1,14 @@
-// src/pages/Products.jsx
 import React, { useEffect, useState, useContext } from 'react';
-import { Card, Button, Row, Col, Alert } from 'react-bootstrap';
+import { Card, Button, Row, Col, Alert, Toast, ToastContainer } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext.jsx';
 
 export default function Products() {
   const [products, setProducts] = useState([]);
-  const [error, setError]       = useState(null);
-  const { user }                = useContext(AuthContext);
+  const [error, setError] = useState(null);
+  const { user } = useContext(AuthContext);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -33,27 +34,47 @@ export default function Products() {
   }, [user]);
 
   const addToCart = async (productId, qty = 1) => {
-    const res = await fetch(
-      `http://localhost:8080/api/cart?productId=${productId}&quantity=${qty}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${user.token}`,
-        },
+    try {
+      const res = await fetch(
+        `http://localhost:8080/api/cart?productId=${productId}&quantity=${qty}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${user.token}`,
+          },
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Add failed: ${res.status} ${res.statusText}`);
       }
-    );
+      const item = await res.json(); // newly created/merged CartItem
 
-    if (!res.ok) {
-      throw new Error(`Add failed: ${res.status} ${res.statusText}`);
+      // Show toast on success
+      setToastMsg('Item added to cart!');
+      setShowToast(true);
+
+      return item;
+    } catch (err) {
+      setError(err.message);
     }
-    const item = await res.json(); // newly created/merged CartItem
-    return item;
   };
-
 
   return (
     <>
+      {/* Toast notification */}
+      <ToastContainer position="top-end" className="p-3">
+        <Toast
+          onClose={() => setShowToast(false)}
+          show={showToast}
+          delay={2000}
+          autohide
+          bg="success"
+        >
+          <Toast.Body className="text-white">{toastMsg}</Toast.Body>
+        </Toast>
+      </ToastContainer>
       {!user && (
         <Alert variant="info">
           Please <Link to="/login">log in</Link> to add products to your cart.

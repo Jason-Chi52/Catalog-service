@@ -1,6 +1,6 @@
 // src/pages/Cart.jsx
 import React, { useEffect, useState, useContext, useMemo } from 'react';
-import { Table, Alert, Button, InputGroup, Form, Spinner } from 'react-bootstrap';
+import { Table, Alert, Button, InputGroup, Form, Spinner, Toast, ToastContainer } from 'react-bootstrap';
 import { AuthContext } from '../context/AuthContext.jsx';
 
 export default function Cart() {
@@ -9,6 +9,7 @@ export default function Cart() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [savingIds, setSavingIds] = useState(new Set()); // cartItemIds being saved
+
 
   const API = 'http://localhost:8080/api/cart';
 
@@ -26,6 +27,8 @@ export default function Cart() {
         if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
         const data = await res.json();
         setItems(data);
+
+
       } catch (err) {
         setError(err.message);
       } finally {
